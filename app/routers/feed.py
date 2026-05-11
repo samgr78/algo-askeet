@@ -10,7 +10,7 @@ router = APIRouter()
 @router.post("/feed", response_model=FeedResponse)
 async def get_feed(request: FeedRequest, db: AsyncSession = Depends(get_db)):
     try:
-        # On appelle le moteur de scoring
+        #On appelle le moteur de scoring
         recommendations = await get_personalized_feed(
             db,
             request.user_id,

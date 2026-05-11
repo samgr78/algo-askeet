@@ -10,9 +10,10 @@ fake = Faker('fr_FR')
 async def seed_data():
     async with AsyncSessionLocal() as session:
         print("Nettoyage des anciennes données")
-        # décommenter pour repartir de zéro à chaque fois
         await session.execute(text("SET FOREIGN_KEY_CHECKS = 0;"))
-        await session.execute(text("TRUNCATE surveys; TRUNCATE users; TRUNCATE categories; TRUNCATE user_category;"))
+        tables = ["surveys", "users", "categories", "user_category", "tags", "survey_tags", "votes"]
+        for table in tables:
+            await session.execute(text(f"TRUNCATE {table};"))
         await session.execute(text("SET FOREIGN_KEY_CHECKS = 1;"))
 
         print("Création des catégories...")
@@ -44,6 +45,14 @@ async def seed_data():
             )
             user_ids.append(u_id)
 
+        print("🏷️ Création des tags...")
+        tags_pool = ["#fun", "#vintage", "#actu", "#debat", "#insolite", "#manger", "#sportif", "#gaming"]
+        tag_ids = []
+        for t_name in tags_pool:
+            t_id = uuid.uuid4().bytes
+            await session.execute(text("INSERT INTO tags (id, name) VALUES (:id, :n)"), {"id": t_id, "n": t_name})
+            tag_ids.append(t_id)
+
         print("Remplissage des intérêts (user_category)...")
         for u_id in user_ids:
             # On donne entre 1 et 3 intérêts par utilisateur
@@ -55,18 +64,37 @@ async def seed_data():
                     {"id": uc_id, "uid": u_id, "cid": c_id}
                 )
 
-        print("Création des sondages (Surveys)...")
+        print("📊 Création des sondages...")
+        survey_ids = []
         for _ in range(50):
             s_id = uuid.uuid4().bytes
             await session.execute(text(
-                "INSERT INTO surveys (id, creator_id, title, category_id) VALUES (:id ,:ci, :t, :cati)"),
+                "INSERT INTO surveys (id, creator_id, title, up, category_id, created_at) "
+                "VALUES (:id ,:ci, :t, :up, :cati, NOW())"),
                 {
-                    "id": s_id,
-                    "ci": random.choice(user_ids),
-                    "t": fake.sentence(nb_words=6).replace(".", "") + " ?",
-                    "cati": random.choice(category_ids),
+                    "id": s_id, "ci": random.choice(user_ids), "t": fake.sentence() + " ?",
+                    "up": random.randint(5, 1000), "cati": random.choice(category_ids)
                 }
             )
+            survey_ids.append(s_id)
+
+            # Lier 1 à 3 tags par sondage
+            chosen_tags = random.sample(tag_ids, k=random.randint(1, 3))
+            for t_id in chosen_tags:
+                await session.execute(text(
+                    "INSERT INTO survey_tags (survey_id, tag_id) VALUES (:sid, :tid)"),
+                    {"sid": s_id, "tid": t_id}
+                )
+
+        print("🗳️ Génération des votes (pour l'algo)...")
+        for u_id in user_ids:
+            # Chaque user vote "up" sur 5 sondages au hasard
+            voted_surveys = random.sample(survey_ids, k=5)
+            for s_id in voted_surveys:
+                await session.execute(text(
+                    "INSERT INTO votes (id, user_id, poll_id, type) VALUES (:id, :uid, :pid, 'up')"),
+                    {"id": uuid.uuid4().bytes, "uid": u_id, "pid": s_id}
+                )
 
         await session.commit()
         print("Base de données locale peuplée avec succès !")
