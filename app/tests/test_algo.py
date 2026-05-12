@@ -10,9 +10,9 @@ async def verify_algo(user_uuid_str):
 
     async with AsyncSessionLocal() as db:
         # 1. On récupère les recos de l'algo
-        recos = await get_personalized_feed(db, user_id, limit=5, seen_ids=[])
+        recos = await get_personalized_feed(db, user_id, limit=10, seen_ids=[])
 
-        print(f"\n🔍 Vérification pour l'user {user_uuid_str}")
+        print(f"\n Vérification pour l'user {user_uuid_str}")
 
         for i, poll_id in enumerate(recos):
             # 2. Pour chaque reco, on regarde sa catégorie et ses tags en SQL
