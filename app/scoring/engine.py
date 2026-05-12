@@ -44,7 +44,7 @@ def compute_tag_score(user_favorite_tags: Set[bytes], poll_tags_raw: bytes) -> f
             match_count += 1
 
     # On donne 20 points de bonus par tag correspondant
-    return float(match_count * 20)
+    return float(match_count * 50)
 
 
 # --- LE MOTEUR PRINCIPAL ---
@@ -69,13 +69,9 @@ async def get_personalized_feed(
 
     # 2. Récupération des sondages (avec Jointure pour les tags)
     query_str = """
-                SELECT s.id, \
-                       s.category_id, \
-                       s.up, \
-                       s.created_at,
-                       GROUP_CONCAT(st.tag_id) as tags
+                SELECT s.id, s.category_id, s.up, s.down, s.created_at, GROUP_CONCAT(st.tag_id) as tags
                 FROM surveys s
-                         LEFT JOIN survey_tags st ON s.id = st.survey_id \
+                LEFT JOIN survey_tags st ON s.id = st.survey_id \
                 """
 
     params = {}
@@ -92,7 +88,7 @@ async def get_personalized_feed(
     scored_surveys = []
     now = datetime.now(timezone.utc)
 
-    for s_id, s_cat_id, s_up, s_created_at, s_tags in all_surveys:
+    for s_id, s_cat_id, s_up, s_down, s_created_at, s_tags in all_surveys:
         score = 0.0
 
         # Signal 1 : Catégories (Choix conscients de l'user)
@@ -103,7 +99,8 @@ async def get_personalized_feed(
         score += compute_tag_score(user_fav_tags, s_tags)
 
         # Signal 3 : Popularité
-        score += 1.5 * float(s_up)
+        score += 0.5 * float(s_up or 0)
+        score -= 0.5 * float(s_down or 0)
 
         # Signal 4 : Fraîcheur
         if s_created_at:
@@ -111,6 +108,14 @@ async def get_personalized_feed(
                 s_created_at = s_created_at.replace(tzinfo=timezone.utc)
             hours_old = (now - s_created_at).total_seconds() / 3600
             score += max(0, 30 - (hours_old * 0.5))
+
+        if score > 0:
+            print(f"--- Scoring Survey {UUID(bytes=s_id)} ---")
+            print(f"  > Base (Catégorie): {'+100' if s_cat_id in user_categories else '0'}")
+            print(f"  > Bonus Tags: {compute_tag_score(user_fav_tags, s_tags)}")
+            print(f"  > Popularité: {0.5 * float(s_up)}")
+            print(f" > Up et Down: {s_up} - {s_down}" )
+            print(f"  > TOTAL SCORE: {score}")
 
         scored_surveys.append((UUID(bytes=s_id), score))
 
