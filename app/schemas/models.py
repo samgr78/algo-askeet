@@ -1,12 +1,13 @@
 from pydantic import BaseModel, Field
 from uuid import UUID
 from typing import List, Optional
+from app.config import settings
 
 # REQUÊTES (Rust ->Python)
 
 class FeedRequest(BaseModel):
     user_id: UUID
-    limit: int = Field(default=10, ge=1, le=50)
+    limit: int = Field(settings.POLL_REQUEST_LIMIT, ge=1, le=50)
     # Liste des IDs que l'utilisateur a déjà vus pour éviter les doublons
     seen_ids: List[UUID] = []
 

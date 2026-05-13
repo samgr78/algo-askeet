@@ -3,6 +3,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.infrastructure.db import get_db
 from app.schemas.models import FeedRequest, FeedResponse
 from app.scoring.engine import get_personalized_feed
+from fastapi.encoders import jsonable_encoder
 
 router = APIRouter()
 
