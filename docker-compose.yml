@@ -1,6 +1,6 @@
 services:
   algo:
-    image: nasurall/askeet-algo:latest
+    image: ghcr.io/samgr78/algo-askeet:latest
     container_name: algo-askeet
     restart: always
     # DB creds + API_SECRET_KEY provided by the server-side .env (NOT in git)
