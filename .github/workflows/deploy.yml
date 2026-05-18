@@ -1,0 +1,73 @@
+name: Deploy algo to VPS
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Login to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_PASSWORD }}
+
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          push: true
+          tags: ${{ secrets.DOCKER_USERNAME }}/askeet-algo:latest
+
+      - name: Deploy on VPS via SSH
+        env:
+          KEY_B64: ${{ secrets.VPS_SSH_KEY_B64 }}
+          VPS_HOST: ${{ secrets.VPS_HOST }}
+          VPS_USER: ${{ secrets.VPS_USER }}
+          VPS_PORT: ${{ secrets.VPS_PORT }}
+          IMAGE: ${{ secrets.DOCKER_USERNAME }}/askeet-algo:latest
+        run: |
+          set -euo pipefail
+
+          if [ -z "${KEY_B64:-}" ]; then
+            echo "::error::Secret VPS_SSH_KEY_B64 is empty. Set it (Settings > Secrets and variables > Actions) to the single-line base64 of the private key."
+            exit 1
+          fi
+
+          install -d -m 700 ~/.ssh
+          echo "$KEY_B64" | base64 -d > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+
+          # Validate the decoded key before using it (clear error if mangled)
+          if ! ssh-keygen -y -f ~/.ssh/deploy_key > /dev/null 2>&1; then
+            echo "::error::Decoded key is not a valid private key. Re-create VPS_SSH_KEY_B64 from: base64 -w0 <keyfile>"
+            exit 1
+          fi
+
+          PORT="${VPS_PORT:-22}"
+          SSH="ssh -i $HOME/.ssh/deploy_key -p $PORT \
+            -o IdentitiesOnly=yes -o StrictHostKeyChecking=no \
+            -o UserKnownHostsFile=/dev/null -o ConnectTimeout=15"
+
+          $SSH "${VPS_USER}@${VPS_HOST}" IMAGE="$IMAGE" bash -s <<'EOSSH'
+          set -e
+          docker pull "$IMAGE"
+          docker stop algo-askeet || true
+          docker rm algo-askeet || true
+          docker run -d \
+            --name algo-askeet \
+            --restart always \
+            -p 8000:8000 \
+            --env-file /var/www/algo/.env \
+            "$IMAGE"
+          echo "Deploiement algo termine ! ($(docker inspect algo-askeet --format '{{.State.Status}}'))"
+          EOSSH
+
+          rm -f ~/.ssh/deploy_key
