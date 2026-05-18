@@ -3,11 +3,16 @@ from sqlalchemy.orm import declarative_base
 from app.config import settings
 
 # 1. Création du moteur de connexion
-# pool_size : nombre de connexions maintenues ouvertes (augmente la scalabilité)
+# Pool volontairement petit : MySQL mutualisé Hostinger plafonne très bas
+# max_user_connections. pool_pre_ping teste la connexion avant usage et
+# pool_recycle la recycle avant le wait_timeout court de Hostinger
+# (évite "Lost connection / Connection reset by peer").
 engine = create_async_engine(
     settings.DATABASE_URL,
-    pool_size=10,
-    max_overflow=20,
+    pool_size=3,
+    max_overflow=2,
+    pool_pre_ping=True,
+    pool_recycle=180,
     echo=False  # Mets True pour voir les requêtes SQL dans la console en dev
 )
 
