@@ -69,6 +69,7 @@ jobs:
           $SSH "${VPS_USER}@${VPS_HOST}" \
             IMAGE="$IMAGE" GHCR_USER="$GHCR_USER" GHCR_TOKEN="$GHCR_TOKEN" bash -s <<'EOSSH'
           set -e
+          docker network create askeet-net 2>/dev/null || true
           echo "$GHCR_TOKEN" | docker login ghcr.io -u "$GHCR_USER" --password-stdin
           docker pull "$IMAGE"
           docker stop algo-askeet || true
@@ -76,6 +77,7 @@ jobs:
           docker run -d \
             --name algo-askeet \
             --restart always \
+            --network askeet-net \
             -p 8000:8000 \
             --env-file /var/www/algo/.env \
             "$IMAGE"
