@@ -7,11 +7,16 @@ from app.infrastructure.db import AsyncSessionLocal
 
 fake = Faker('fr_FR')
 
+
 async def seed_data():
     async with AsyncSessionLocal() as session:
         print("Nettoyage des anciennes données")
         await session.execute(text("SET FOREIGN_KEY_CHECKS = 0;"))
-        tables = ["surveys", "users", "categories", "user_category", "tags", "survey_tags", "votes"]
+        # Ajout de toutes les tables liées aux réponses dans le nettoyage
+        tables = [
+            "user_answer", "survey_answer", "answers", "surveys",
+            "users", "categories", "user_category", "tags", "survey_tags", "votes"
+        ]
         for table in tables:
             await session.execute(text(f"TRUNCATE {table};"))
         await session.execute(text("SET FOREIGN_KEY_CHECKS = 1;"))
@@ -24,7 +29,6 @@ async def seed_data():
             await session.execute(
                 text("INSERT INTO categories (id, name) VALUES (:id, :c)"), {"id": cat_id, "c": cat}
             )
-            #on récupère l'ID via lastrowid
             category_ids.append(cat_id)
 
         print("Création des utilisateurs...")
@@ -55,7 +59,6 @@ async def seed_data():
 
         print("Remplissage des intérêts (user_category)...")
         for u_id in user_ids:
-            # On donne entre 1 et 3 intérêts par utilisateur
             chosen_cats = random.sample(category_ids, k=random.randint(1, 3))
             for c_id in chosen_cats:
                 uc_id = uuid.uuid4().bytes
@@ -64,7 +67,21 @@ async def seed_data():
                     {"id": uc_id, "uid": u_id, "cid": c_id}
                 )
 
-        print("📊 Création des sondages...")
+        print("📝 Création du pool de réponses globales (answers)...")
+        answers_pool = [
+            "Oui", "Non", "Peut-être", "Tout à fait", "Jamais", "Parfois",
+            "Je ne sais pas", "C'est l'évidence !", "Pas du tout", "À tester"
+        ]
+        answer_ids = []
+        for ans_text in answers_pool:
+            ans_id = uuid.uuid4().bytes
+            await session.execute(
+                text("INSERT INTO answers (id, text, img) VALUES (:id, :txt, NULL)"),
+                {"id": ans_id, "txt": ans_text}
+            )
+            answer_ids.append(ans_id)
+
+        print("📊 Création des sondages et association des réponses possibles...")
         survey_ids = []
         for _ in range(50):
             s_id = uuid.uuid4().bytes
@@ -77,6 +94,15 @@ async def seed_data():
                 }
             )
             survey_ids.append(s_id)
+
+            # Liaison Pivot : Assigner entre 2 et 4 réponses à ce sondage précis
+            chosen_answers = random.sample(answer_ids, k=random.randint(2, 4))
+            for ans_id in chosen_answers:
+                sa_id = uuid.uuid4().bytes  # Clé primaire de la table pivot survey_answer
+                await session.execute(text(
+                    "INSERT INTO survey_answer (id, survey_id, answer_id) VALUES (:id, :sid, :aid)"),
+                    {"id": sa_id, "sid": s_id, "aid": ans_id}
+                )
 
             # Lier 1 à 3 tags par sondage
             chosen_tags = random.sample(tag_ids, k=random.randint(1, 3))
@@ -98,6 +124,7 @@ async def seed_data():
 
         await session.commit()
         print("Base de données locale peuplée avec succès !")
+
 
 if __name__ == "__main__":
     try:
