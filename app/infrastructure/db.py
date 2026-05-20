@@ -11,7 +11,6 @@ engine = create_async_engine(
     settings.DATABASE_URL,
     pool_size=3,
     max_overflow=2,
-    pool_pre_ping=True,
     pool_recycle=180,
     echo=False  # Mets True pour voir les requêtes SQL dans la console en dev
 )
